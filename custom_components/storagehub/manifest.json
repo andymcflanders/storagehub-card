@@ -1,0 +1,12 @@
+{
+  "domain": "storagehub",
+  "name": "StorageHub",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/yourusername/ha-storagehunters",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/yourusername/ha-storagehunters/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

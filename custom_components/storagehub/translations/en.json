@@ -1,0 +1,73 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to StorageHub",
+        "description": "Enter your StorageHub server details. You can create an API key in the StorageHub web UI under Settings > API Keys.",
+        "data": {
+          "host": "URL",
+          "api_key": "API Key",
+          "scan_interval": "Update interval (seconds)"
+        },
+        "data_description": {
+          "host": "Full URL to your StorageHub instance (e.g., http://storagehub.local)",
+          "api_key": "API key with 'read' and 'search' scopes",
+          "scan_interval": "How often to poll for updates (60-3600 seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to StorageHub. Verify the URL is correct and the server is running.",
+      "invalid_auth": "Invalid API key. Verify the key is correct and has the required scopes (read, search).",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This StorageHub instance is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "StorageHub Options",
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        },
+        "data_description": {
+          "scan_interval": "How often to poll for updates (60-3600 seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_items": {
+        "name": "Total Items"
+      },
+      "overdue_reminders": {
+        "name": "Overdue Reminders"
+      }
+    },
+    "binary_sensor": {
+      "connected": {
+        "name": "Connected"
+      },
+      "has_overdue_reminders": {
+        "name": "Has Overdue Reminders"
+      }
+    }
+  },
+  "exceptions": {
+    "no_config_entry": {
+      "message": "No StorageHub integration configured. Please add it via Settings > Devices & Services."
+    },
+    "auth_failed": {
+      "message": "Authentication failed. Check your API key."
+    },
+    "cannot_connect": {
+      "message": "Cannot connect to StorageHub server."
+    },
+    "container_not_found": {
+      "message": "Container with QR code '{qr_code}' not found."
+    }
+  }
+}
