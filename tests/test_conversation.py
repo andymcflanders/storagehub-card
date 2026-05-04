@@ -26,6 +26,13 @@ def _stub_status(mock: AiohttpClientMocker) -> None:
         json={"name": "StorageHub", "version": "1.1.0", "api_version": "v1"},
     )
     mock.get(f"{HOST}/api/ha/stats", json={"total_items": 5})
+    # IndexCoordinator's first refresh runs during async_setup_entry; an
+    # unmocked /index URL would AssertionError out of the test setup.
+    mock.get(
+        f"{HOST}/api/ha/items/index",
+        json=[],
+        headers={"ETag": '"empty"'},
+    )
 
 
 def _item(**overrides: Any) -> dict[str, Any]:
@@ -250,4 +257,6 @@ async def test_voice_unknown_sentence_pass_through(
     # no_intent_match (or similar). The exact response_type indicates an
     # error/no-match path; what matters is we didn't hit the trigger.
     assert result.response.error_code is not None
-    assert len(aioclient_mock.mock_calls) == 2  # status + stats only
+    # Setup hits status + stats + index. Phase 2 voice trigger should NOT
+    # add a call for an unmatched sentence.
+    assert len(aioclient_mock.mock_calls) == 3

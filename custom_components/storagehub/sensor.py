@@ -10,7 +10,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -18,7 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import StorageHubConfigEntry
 from .const import DOMAIN
-from .coordinator import HeartbeatCoordinator, HeartbeatData
+from .coordinator import HeartbeatCoordinator, HeartbeatData, IndexCoordinator
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -50,6 +50,7 @@ async def async_setup_entry(
     async_add_entities(
         StorageHubSensor(coordinator, entry, description) for description in SENSORS
     )
+    async_add_entities([StorageHubIndexEtagSensor(entry.runtime_data.index, entry)])
 
 
 class StorageHubSensor(CoordinatorEntity[HeartbeatCoordinator], SensorEntity):
@@ -81,3 +82,32 @@ class StorageHubSensor(CoordinatorEntity[HeartbeatCoordinator], SensorEntity):
         if self.coordinator.data is None:
             return None
         return self.entity_description.value_fn(self.coordinator.data)
+
+
+class StorageHubIndexEtagSensor(CoordinatorEntity[IndexCoordinator], SensorEntity):
+    """Diagnostic sensor exposing the cached index ETag.
+
+    The Lovelace card subscribes to this entity's `state_changed` events
+    so it knows to re-fetch `storagehub.search_lite` when the backend's
+    index payload changes. Disabled by default — only users running the
+    card need to enable it.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "index_etag"
+    _attr_icon = "mdi:database-sync"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self, coordinator: IndexCoordinator, entry: StorageHubConfigEntry
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.unique_id}_index_etag"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    @property
+    def native_value(self) -> str | None:
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.etag

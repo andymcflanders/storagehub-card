@@ -159,3 +159,94 @@ async def test_search_invalid_auth(
     aioclient_mock.get(f"{HOST}/api/ha/search", status=401)
     with pytest.raises(InvalidAuth):
         await _client(hass).async_search("Sverre")
+
+
+_INDEX_BODY = [
+    {
+        "id": "abc",
+        "name": "Blå Cordbukser",
+        "owner_name": "Sverre",
+        "container_name": "Kasse 1",
+        "location_name": "Sportsbod",
+        "ai_names": ["Blue Cord Pants", "Blå Cordbukser"],
+    },
+    {
+        "id": "def",
+        "name": "Apple TV Fjernkontroll",
+        "owner_name": None,
+        "container_name": None,
+        "location_name": None,
+        "ai_names": [],
+    },
+]
+
+
+async def test_get_index_first_fetch_omits_if_none_match(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(
+        f"{HOST}/api/ha/items/index",
+        json=_INDEX_BODY,
+        headers={"ETag": '"abc123"'},
+    )
+
+    etag, entries = await _client(hass).async_get_index()
+
+    assert etag == '"abc123"'
+    assert entries is not None and len(entries) == 2
+    request = aioclient_mock.mock_calls[-1]
+    headers = request[3]
+    assert "If-None-Match" not in headers
+
+
+async def test_get_index_sends_if_none_match_and_handles_304(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(f"{HOST}/api/ha/items/index", status=304)
+
+    etag, entries = await _client(hass).async_get_index(etag='"abc123"')
+
+    assert etag == '"abc123"'  # request etag passes through unchanged
+    assert entries is None
+    request = aioclient_mock.mock_calls[-1]
+    headers = request[3]
+    assert headers["If-None-Match"] == '"abc123"'
+
+
+async def test_get_index_parses_entries(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(
+        f"{HOST}/api/ha/items/index",
+        json=_INDEX_BODY,
+        headers={"ETag": '"x"'},
+    )
+
+    _, entries = await _client(hass).async_get_index()
+    assert entries is not None
+    first, second = entries
+    assert first.id == "abc"
+    assert first.owner_name == "Sverre"
+    assert first.ai_names == ("Blue Cord Pants", "Blå Cordbukser")
+    assert second.owner_name is None
+    assert second.container_name is None
+    assert second.ai_names == ()
+
+
+async def test_get_index_invalid_auth(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(f"{HOST}/api/ha/items/index", status=401)
+    with pytest.raises(InvalidAuth):
+        await _client(hass).async_get_index()
+
+
+async def test_get_index_cannot_connect(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(
+        f"{HOST}/api/ha/items/index",
+        exc=aiohttp.ClientConnectionError("boom"),
+    )
+    with pytest.raises(CannotConnect):
+        await _client(hass).async_get_index()

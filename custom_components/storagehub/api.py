@@ -9,7 +9,7 @@ from typing import Any
 
 import aiohttp
 
-from .const import API_SEARCH, API_STATS, API_STATUS, DEFAULT_TIMEOUT
+from .const import API_INDEX, API_SEARCH, API_STATS, API_STATUS, DEFAULT_TIMEOUT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,6 +108,29 @@ class SearchResult:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class IndexEntry:
+    """One row of the lite item index used by the Lovelace card."""
+
+    id: str
+    name: str
+    owner_name: str | None
+    container_name: str | None
+    location_name: str | None
+    ai_names: tuple[str, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> IndexEntry:
+        return cls(
+            id=str(data["id"]),
+            name=str(data.get("name") or ""),
+            owner_name=data.get("owner_name"),
+            container_name=data.get("container_name"),
+            location_name=data.get("location_name"),
+            ai_names=tuple(data.get("ai_names") or ()),
+        )
+
+
 class StorageHubApiClient:
     """Thin async client around StorageHub's HA-facing endpoints."""
 
@@ -140,6 +163,51 @@ class StorageHubApiClient:
             "GET", API_SEARCH, params={"q": query, "limit": limit}
         )
         return SearchResult.from_dict(data)
+
+    async def async_get_index(
+        self, etag: str | None = None
+    ) -> tuple[str | None, list[IndexEntry] | None]:
+        """Fetch the lite item index, conditionally on `etag`.
+
+        Bypasses `_request` because 304 isn't an error and carries no body.
+        Returns `(new_etag, entries)`; on 304 the new_etag mirrors the
+        request etag and entries is None — caller keeps the prior payload.
+        ETag string includes its surrounding quotes; pass through verbatim.
+        """
+        url = f"{self._host}{API_INDEX}"
+        headers: dict[str, str] = {
+            "Accept": "application/json",
+            "X-API-Key": self._api_key,
+        }
+        if etag is not None:
+            headers["If-None-Match"] = etag
+
+        try:
+            async with self._session.request(
+                "GET",
+                url,
+                headers=headers,
+                timeout=self._timeout,
+            ) as response:
+                if response.status == 304:
+                    return etag, None
+                if response.status in (401, 403):
+                    raise InvalidAuth(
+                        f"API key rejected ({response.status}) for {API_INDEX}"
+                    )
+                if response.status >= 400:
+                    body = await response.text()
+                    raise StorageHubError(
+                        f"GET {API_INDEX} -> {response.status}: {body[:200]}"
+                    )
+                new_etag = response.headers.get("ETag")
+                payload = await response.json()
+                entries = [IndexEntry.from_dict(item) for item in payload]
+                return new_etag, entries
+        except asyncio.TimeoutError as err:
+            raise CannotConnect(f"Timeout contacting {url}") from err
+        except aiohttp.ClientError as err:
+            raise CannotConnect(f"Cannot reach {url}: {err}") from err
 
     async def _request(
         self,

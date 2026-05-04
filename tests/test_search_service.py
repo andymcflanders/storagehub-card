@@ -28,6 +28,13 @@ def _stub_status(mock: AiohttpClientMocker) -> None:
         json={"name": "StorageHub", "version": "1.1.0", "api_version": "v1"},
     )
     mock.get(f"{HOST}/api/ha/stats", json={"total_items": 5})
+    # IndexCoordinator's first refresh runs during async_setup_entry; an
+    # unmocked /index URL would AssertionError out of the test setup.
+    mock.get(
+        f"{HOST}/api/ha/items/index",
+        json=[],
+        headers={"ETag": '"empty"'},
+    )
 
 
 def _search_payload(

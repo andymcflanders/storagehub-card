@@ -12,7 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .api import StorageHubApiClient
-from .coordinator import HeartbeatCoordinator
+from .coordinator import HeartbeatCoordinator, IndexCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ class StorageHubData:
 
     client: StorageHubApiClient
     heartbeat: HeartbeatCoordinator
+    index: IndexCoordinator
 
 
 type StorageHubConfigEntry = ConfigEntry[StorageHubData]
@@ -51,9 +52,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: StorageHubConfigEntry) -
         api_key=entry.data[CONF_API_KEY],
     )
     heartbeat = HeartbeatCoordinator(hass, client, entry)
+    index = IndexCoordinator(hass, client, entry)
+    # Sequential first-refresh: heartbeat then index. Parallel via gather()
+    # would shave ~200ms off cold-start but swallows one of two simultaneous
+    # auth failures, hiding the real error.
     await heartbeat.async_config_entry_first_refresh()
+    await index.async_config_entry_first_refresh()
 
-    entry.runtime_data = StorageHubData(client=client, heartbeat=heartbeat)
+    entry.runtime_data = StorageHubData(client=client, heartbeat=heartbeat, index=index)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

@@ -46,6 +46,9 @@
     "sensor": {
       "total_items": {
         "name": "Total items"
+      },
+      "index_etag": {
+        "name": "Index ETag"
       }
     },
     "binary_sensor": {
@@ -68,6 +71,14 @@
           "description": "Maximum number of items to return (1–50)."
         }
       }
+    },
+    "search_lite": {
+      "name": "Get cached item index",
+      "description": "Returns the cached lightweight item index used by the StorageHub Lovelace card for client-side filtering."
+    },
+    "refresh_index": {
+      "name": "Refresh item index",
+      "description": "Forces an immediate refresh of the cached lightweight item index. Useful for debugging."
     }
   },
   "exceptions": {

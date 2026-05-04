@@ -16,10 +16,18 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from . import StorageHubData
-from .api import CannotConnect, InvalidAuth, SearchResultItem, StorageHubError
+from .api import (
+    CannotConnect,
+    IndexEntry,
+    InvalidAuth,
+    SearchResultItem,
+    StorageHubError,
+)
 from .const import DOMAIN
 
 SERVICE_SEARCH = "search"
+SERVICE_SEARCH_LITE = "search_lite"
+SERVICE_REFRESH_INDEX = "refresh_index"
 
 _SEARCH_SCHEMA = vol.Schema(
     {
@@ -29,6 +37,7 @@ _SEARCH_SCHEMA = vol.Schema(
         ),
     }
 )
+_NO_FIELDS_SCHEMA = vol.Schema({})
 
 
 async def async_register_services(hass: HomeAssistant) -> None:
@@ -37,13 +46,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
         return
 
     async def _handle_search(call: ServiceCall) -> ServiceResponse:
-        entries = hass.config_entries.async_loaded_entries(DOMAIN)
-        if not entries:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="not_configured"
-            )
-
-        data: StorageHubData = entries[0].runtime_data
+        data = _resolve_runtime_data(hass)
         query = call.data["query"]
         limit = call.data["limit"]
 
@@ -78,6 +81,46 @@ async def async_register_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.ONLY,
     )
 
+    async def _handle_search_lite(call: ServiceCall) -> ServiceResponse:
+        data = _resolve_runtime_data(hass)
+        snapshot = data.index.data
+        if snapshot is None:
+            return {"etag": None, "items": [], "count": 0}
+        return {
+            "etag": snapshot.etag,
+            "items": [_serialize_index_entry(entry) for entry in snapshot.entries],
+            "count": len(snapshot.entries),
+        }
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SEARCH_LITE,
+        _handle_search_lite,
+        schema=_NO_FIELDS_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    async def _handle_refresh_index(call: ServiceCall) -> None:
+        data = _resolve_runtime_data(hass)
+        await data.index.async_request_refresh()
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REFRESH_INDEX,
+        _handle_refresh_index,
+        schema=_NO_FIELDS_SCHEMA,
+        supports_response=SupportsResponse.NONE,
+    )
+
+
+def _resolve_runtime_data(hass: HomeAssistant) -> StorageHubData:
+    entries = hass.config_entries.async_loaded_entries(DOMAIN)
+    if not entries:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN, translation_key="not_configured"
+        )
+    return entries[0].runtime_data
+
 
 def _serialize_item(item: SearchResultItem) -> dict[str, Any]:
     return {
@@ -92,4 +135,15 @@ def _serialize_item(item: SearchResultItem) -> dict[str, Any]:
         "owner_name": item.owner_name,
         "primary_image_url": item.primary_image_url,
         "tags": list(item.tags),
+    }
+
+
+def _serialize_index_entry(entry: IndexEntry) -> dict[str, Any]:
+    return {
+        "id": entry.id,
+        "name": entry.name,
+        "owner_name": entry.owner_name,
+        "container_name": entry.container_name,
+        "location_name": entry.location_name,
+        "ai_names": list(entry.ai_names),
     }

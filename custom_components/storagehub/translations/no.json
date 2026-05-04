@@ -46,6 +46,9 @@
     "sensor": {
       "total_items": {
         "name": "Antall ting"
+      },
+      "index_etag": {
+        "name": "Indeks-ETag"
       }
     },
     "binary_sensor": {
@@ -68,6 +71,14 @@
           "description": "Maks antall ting å returnere (1–50)."
         }
       }
+    },
+    "search_lite": {
+      "name": "Hent hurtigbufret inventarindeks",
+      "description": "Returnerer den hurtigbufrede lette inventarindeksen som StorageHub-Lovelace-kortet bruker til klient-side-filtrering."
+    },
+    "refresh_index": {
+      "name": "Oppdater inventarindeks",
+      "description": "Tvinger en umiddelbar oppdatering av den hurtigbufrede lette inventarindeksen. Nyttig for feilsøking."
     }
   },
   "exceptions": {
