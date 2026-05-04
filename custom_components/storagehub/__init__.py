@@ -31,10 +31,12 @@ type StorageHubConfigEntry = ConfigEntry[StorageHubData]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register domain-level services once per HA process."""
+    """Register domain-level services and the voice trigger once per HA process."""
+    from .conversation import async_register_conversation
     from .services import async_register_services
 
     await async_register_services(hass)
+    await async_register_conversation(hass)
     return True
 
 
