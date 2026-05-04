@@ -72,13 +72,23 @@ async def test_register_trigger_attaches_after_setup(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
     await _setup_full(hass, aioclient_mock)
-    from homeassistant.components.conversation.const import DATA_DEFAULT_ENTITY
+    from homeassistant.components.conversation import get_agent_manager
 
-    agent = hass.data[DATA_DEFAULT_ENTITY]
-    assert any(
-        any("{item}" in s for s in trigger.sentences)
-        for trigger in agent.trigger_sentences
-    )
+    manager = get_agent_manager(hass)
+    # AgentManager.trigger_sentences (HA 2025.10+) is a flat list[str].
+    # DefaultAgent.trigger_sentences (HA <= 2025.9) is list[TriggerData],
+    # each with a `.sentences: list[str]`. Flatten both shapes.
+    if hasattr(manager, "trigger_sentences"):
+        registered = list(manager.trigger_sentences)
+    else:
+        from homeassistant.components.conversation.const import DATA_DEFAULT_ENTITY
+
+        agent = hass.data[DATA_DEFAULT_ENTITY]
+        registered = [
+            s for trigger in agent.trigger_sentences for s in trigger.sentences
+        ]
+
+    assert any("{item}" in s for s in registered)
 
 
 async def test_voice_happy_path_with_owner_en(

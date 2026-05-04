@@ -13,11 +13,9 @@ import logging
 from typing import TYPE_CHECKING
 
 from hassil.recognize import RecognizeResult
-from homeassistant.components.conversation import DOMAIN as CONVERSATION_DOMAIN
-from homeassistant.components.conversation.const import DATA_DEFAULT_ENTITY
+from homeassistant.components.conversation import get_agent_manager
 from homeassistant.components.conversation.models import ConversationInput
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.setup import async_setup_component
 
 from .api import CannotConnect, InvalidAuth, SearchResult, StorageHubError
 from .const import DOMAIN
@@ -146,22 +144,36 @@ def _format_response(
     )
 
 
+_REGISTERED_KEY = f"{DOMAIN}_conversation_registered"
+
+
+def _register_trigger(hass: HomeAssistant, sentences: list[str], handler) -> None:
+    """Register a sentence trigger across HA versions.
+
+    HA 2025.10 moved register_trigger from DefaultAgent to AgentManager
+    and removed the DATA_DEFAULT_ENTITY constant. Both versions still
+    expose `get_agent_manager`, so the manager is the stable handle —
+    we just probe for the method.
+    """
+    manager = get_agent_manager(hass)
+    if hasattr(manager, "register_trigger"):
+        manager.register_trigger(sentences, handler)
+        return
+
+    # HA <= 2025.9 fallback: trigger lived on DefaultAgent.
+    from homeassistant.components.conversation.const import (  # noqa: PLC0415
+        DATA_DEFAULT_ENTITY,
+    )
+
+    hass.data[DATA_DEFAULT_ENTITY].register_trigger(sentences, handler)
+
+
 async def async_register_conversation(hass: HomeAssistant) -> None:
     """Register our voice trigger on the default conversation agent."""
     if hass.data.get(_REGISTERED_KEY):
         return
-
-    if DATA_DEFAULT_ENTITY not in hass.data:
-        # `conversation` is in our manifest dependencies, but be defensive
-        # in case async_setup runs before HA finishes wiring the agent.
-        await async_setup_component(hass, CONVERSATION_DOMAIN, {})
-
-    agent = hass.data[DATA_DEFAULT_ENTITY]
-    agent.register_trigger(_TRIGGER_SENTENCES, _build_handler(hass))
+    _register_trigger(hass, _TRIGGER_SENTENCES, _build_handler(hass))
     hass.data[_REGISTERED_KEY] = True
-
-
-_REGISTERED_KEY = f"{DOMAIN}_conversation_registered"
 
 
 def _build_handler(hass: HomeAssistant):
