@@ -8,5 +8,6 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/andersjh/ha-storagehunters/issues",
   "requirements": [],
+  "single_config_entry": true,
   "version": "2.0.0"
 }

@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY, CONF_HOST, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api import StorageHubApiClient
 from .coordinator import HeartbeatCoordinator
@@ -27,6 +28,14 @@ class StorageHubData:
 
 
 type StorageHubConfigEntry = ConfigEntry[StorageHubData]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register domain-level services once per HA process."""
+    from .services import async_register_services
+
+    await async_register_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: StorageHubConfigEntry) -> bool:

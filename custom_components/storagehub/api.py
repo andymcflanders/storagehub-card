@@ -9,7 +9,7 @@ from typing import Any
 
 import aiohttp
 
-from .const import API_STATS, API_STATUS, DEFAULT_TIMEOUT
+from .const import API_SEARCH, API_STATS, API_STATUS, DEFAULT_TIMEOUT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,6 +56,58 @@ class InventoryStats:
         return cls(total_items=int(data.get("total_items") or 0))
 
 
+@dataclass(frozen=True, slots=True)
+class SearchResultItem:
+    """One match returned by /api/ha/search."""
+
+    id: str
+    name: str
+    description: str | None
+    container_name: str | None
+    location_name: str | None
+    condition: str | None
+    seasonal: str | None
+    value_estimate: float | None
+    owner_name: str | None
+    primary_image_url: str | None
+    tags: tuple[str, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SearchResultItem:
+        value = data.get("value_estimate")
+        return cls(
+            id=str(data["id"]),
+            name=str(data.get("name") or ""),
+            description=data.get("description"),
+            container_name=data.get("container_name"),
+            location_name=data.get("location_name"),
+            condition=data.get("condition"),
+            seasonal=data.get("seasonal"),
+            value_estimate=float(value) if value is not None else None,
+            owner_name=data.get("owner_name"),
+            primary_image_url=data.get("primary_image_url"),
+            tags=tuple(data.get("tags") or ()),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SearchResult:
+    """Wrapper around /api/ha/search's response envelope."""
+
+    items: tuple[SearchResultItem, ...]
+    total_count: int
+    query: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SearchResult:
+        raw_items = data.get("items") or ()
+        return cls(
+            items=tuple(SearchResultItem.from_dict(item) for item in raw_items),
+            total_count=int(data.get("total_count") or 0),
+            query=str(data.get("query") or ""),
+        )
+
+
 class StorageHubApiClient:
     """Thin async client around StorageHub's HA-facing endpoints."""
 
@@ -82,6 +134,12 @@ class StorageHubApiClient:
     async def async_get_stats(self) -> InventoryStats:
         data = await self._request("GET", API_STATS)
         return InventoryStats.from_dict(data)
+
+    async def async_search(self, query: str, limit: int = 20) -> SearchResult:
+        data = await self._request(
+            "GET", API_SEARCH, params={"q": query, "limit": limit}
+        )
+        return SearchResult.from_dict(data)
 
     async def _request(
         self,

@@ -47,5 +47,35 @@
         "name": "Connected"
       }
     }
+  },
+  "services": {
+    "search": {
+      "name": "Search inventory",
+      "description": "Search StorageHub for items by name, owner, container, or location.",
+      "fields": {
+        "query": {
+          "name": "Query",
+          "description": "Free-text search. Owner names AND-filter the results, so 'Sverre Bukser' returns only Sverre's pants."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Maximum number of items to return (1–50)."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_configured": {
+      "message": "StorageHub is not configured. Add the integration before calling its services."
+    },
+    "auth_failed": {
+      "message": "StorageHub rejected the API key. Reconfigure the integration."
+    },
+    "cannot_connect": {
+      "message": "Could not reach StorageHub."
+    },
+    "api_error": {
+      "message": "StorageHub returned an error: {detail}"
+    }
   }
 }

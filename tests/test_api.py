@@ -15,6 +15,7 @@ from custom_components.storagehub.api import (
     InvalidAuth,
     StorageHubApiClient,
 )
+from yarl import URL
 
 HOST = "http://example.test"
 API_KEY = "shub_test"
@@ -99,3 +100,62 @@ async def test_strips_trailing_slash_from_host(hass: HomeAssistant) -> None:
         api_key=API_KEY,
     )
     assert client.host == "http://example.test"
+
+
+async def test_search_passes_query_and_limit(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(
+        f"{HOST}/api/ha/search",
+        json={"items": [], "total_count": 0, "query": "Sverre Bukser"},
+    )
+    await _client(hass).async_search("Sverre Bukser", limit=5)
+
+    request = aioclient_mock.mock_calls[-1]
+    url: URL = request[1]
+    assert url.query["q"] == "Sverre Bukser"
+    assert url.query["limit"] == "5"
+
+
+async def test_search_parses_response(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(
+        f"{HOST}/api/ha/search",
+        json={
+            "items": [
+                {
+                    "id": "abc",
+                    "name": "Blå Cordbukser",
+                    "description": "H&M",
+                    "container_name": "Kasse 1",
+                    "location_name": "Sportsbod",
+                    "condition": "good",
+                    "seasonal": "winter",
+                    "value_estimate": 199.0,
+                    "owner_name": "Sverre",
+                    "primary_image_url": "/uploads/x.jpg",
+                    "tags": ["clothing", "winter"],
+                }
+            ],
+            "total_count": 1,
+            "query": "Sverre",
+        },
+    )
+    result = await _client(hass).async_search("Sverre")
+    assert result.total_count == 1
+    assert result.query == "Sverre"
+    assert len(result.items) == 1
+    item = result.items[0]
+    assert item.id == "abc"
+    assert item.owner_name == "Sverre"
+    assert item.value_estimate == 199.0
+    assert item.tags == ("clothing", "winter")
+
+
+async def test_search_invalid_auth(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(f"{HOST}/api/ha/search", status=401)
+    with pytest.raises(InvalidAuth):
+        await _client(hass).async_search("Sverre")

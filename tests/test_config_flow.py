@@ -102,7 +102,7 @@ async def test_user_flow_cannot_connect(
     assert result["errors"] == {"base": "cannot_connect"}
 
 
-async def test_duplicate_host_aborts(
+async def test_second_user_flow_aborts_single_instance(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
     MockConfigEntry(
@@ -111,13 +111,8 @@ async def test_duplicate_host_aborts(
         data={CONF_HOST: HOST, CONF_API_KEY: API_KEY},
     ).add_to_hass(hass)
 
-    _stub_ok(aioclient_mock)
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {CONF_HOST: HOST, CONF_API_KEY: API_KEY},
-    )
     assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
+    assert result["reason"] == "single_instance_allowed"

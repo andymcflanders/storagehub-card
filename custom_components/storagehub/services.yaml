@@ -1,0 +1,16 @@
+search:
+  fields:
+    query:
+      required: true
+      example: "Sverre Bukser"
+      selector:
+        text:
+    limit:
+      required: false
+      default: 20
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box

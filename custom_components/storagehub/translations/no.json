@@ -47,5 +47,35 @@
         "name": "Tilkoblet"
       }
     }
+  },
+  "services": {
+    "search": {
+      "name": "Søk i inventar",
+      "description": "Søk i StorageHub etter ting basert på navn, eier, boks eller plassering.",
+      "fields": {
+        "query": {
+          "name": "Søk",
+          "description": "Fritekstsøk. Eiernavn brukes som AND-filter, så «Sverre Bukser» gir bare Sverres bukser."
+        },
+        "limit": {
+          "name": "Maks treff",
+          "description": "Maks antall ting å returnere (1–50)."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_configured": {
+      "message": "StorageHub er ikke konfigurert. Legg til integrasjonen før du kaller tjenestene."
+    },
+    "auth_failed": {
+      "message": "StorageHub avviste API-nøkkelen. Rekonfigurer integrasjonen."
+    },
+    "cannot_connect": {
+      "message": "Klarte ikke å nå StorageHub."
+    },
+    "api_error": {
+      "message": "StorageHub returnerte en feil: {detail}"
+    }
   }
 }
