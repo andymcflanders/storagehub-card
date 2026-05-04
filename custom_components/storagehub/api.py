@@ -1,39 +1,63 @@
-"""API client for StorageHub."""
+"""Async API client for the StorageHub /api/ha/* surface."""
 
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import logging
 from typing import Any
 
 import aiohttp
 
-from .const import (
-    API_CONTAINER_QR,
-    API_REMINDERS,
-    API_SEARCH,
-    API_STATS,
-    API_STATUS,
-    DEFAULT_TIMEOUT,
-)
+from .const import API_STATS, API_STATUS, DEFAULT_TIMEOUT
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class StorageHubApiError(Exception):
-    """Base exception for StorageHub API errors."""
+class StorageHubError(Exception):
+    """Base error for the StorageHub client."""
 
 
-class CannotConnect(StorageHubApiError):
-    """Exception for connection errors."""
+class CannotConnect(StorageHubError):
+    """The StorageHub host could not be reached."""
 
 
-class InvalidAuth(StorageHubApiError):
-    """Exception for authentication errors."""
+class InvalidAuth(StorageHubError):
+    """The API key was rejected or lacks the required scope."""
+
+
+@dataclass(frozen=True, slots=True)
+class SystemStatus:
+    """Subset of /api/ha/status used by the integration."""
+
+    name: str
+    version: str
+    api_version: str
+    instance_id: str | None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SystemStatus:
+        return cls(
+            name=str(data.get("name") or "StorageHub"),
+            version=str(data.get("version") or "unknown"),
+            api_version=str(data.get("api_version") or "v1"),
+            instance_id=data.get("instance_id"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryStats:
+    """Slim view of /api/ha/stats — just the heartbeat sensor."""
+
+    total_items: int
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> InventoryStats:
+        return cls(total_items=int(data.get("total_items") or 0))
 
 
 class StorageHubApiClient:
-    """API client for StorageHub."""
+    """Thin async client around StorageHub's HA-facing endpoints."""
 
     def __init__(
         self,
@@ -42,14 +66,6 @@ class StorageHubApiClient:
         api_key: str,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> None:
-        """Initialize the API client.
-
-        Args:
-            session: aiohttp client session
-            host: StorageHub host URL (e.g., http://storagehub.local)
-            api_key: API key for authentication
-            timeout: Request timeout in seconds
-        """
         self._session = session
         self._host = host.rstrip("/")
         self._api_key = api_key
@@ -57,143 +73,48 @@ class StorageHubApiClient:
 
     @property
     def host(self) -> str:
-        """Return the host URL."""
         return self._host
 
-    def _get_headers(self) -> dict[str, str]:
-        """Get request headers with authentication."""
-        return {
-            "X-API-Key": self._api_key,
-            "Content-Type": "application/json",
-        }
+    async def async_get_status(self) -> SystemStatus:
+        data = await self._request("GET", API_STATUS, authenticated=False)
+        return SystemStatus.from_dict(data)
+
+    async def async_get_stats(self) -> InventoryStats:
+        data = await self._request("GET", API_STATS)
+        return InventoryStats.from_dict(data)
 
     async def _request(
         self,
         method: str,
-        endpoint: str,
+        path: str,
+        *,
         params: dict[str, Any] | None = None,
         authenticated: bool = True,
     ) -> dict[str, Any]:
-        """Make an API request.
-
-        Args:
-            method: HTTP method
-            endpoint: API endpoint
-            params: Query parameters
-            authenticated: Whether to include auth headers
-
-        Returns:
-            Response JSON data
-
-        Raises:
-            CannotConnect: If connection fails
-            InvalidAuth: If authentication fails
-            StorageHubApiError: For other API errors
-        """
-        url = f"{self._host}{endpoint}"
-        headers = self._get_headers() if authenticated else {}
+        url = f"{self._host}{path}"
+        headers: dict[str, str] = {"Accept": "application/json"}
+        if authenticated:
+            headers["X-API-Key"] = self._api_key
 
         try:
-            async with asyncio.timeout(self._timeout.total):
-                async with self._session.request(
-                    method,
-                    url,
-                    headers=headers,
-                    params=params,
-                ) as response:
-                    if response.status == 401:
-                        raise InvalidAuth("Invalid API key")
-                    if response.status == 403:
-                        raise InvalidAuth("Insufficient API key permissions")
-                    if response.status >= 400:
-                        text = await response.text()
-                        raise StorageHubApiError(
-                            f"API error {response.status}: {text}"
-                        )
-                    return await response.json()
-
+            async with self._session.request(
+                method,
+                url,
+                params=params,
+                headers=headers,
+                timeout=self._timeout,
+            ) as response:
+                if response.status in (401, 403):
+                    raise InvalidAuth(
+                        f"API key rejected ({response.status}) for {path}"
+                    )
+                if response.status >= 400:
+                    body = await response.text()
+                    raise StorageHubError(
+                        f"{method} {path} -> {response.status}: {body[:200]}"
+                    )
+                return await response.json()
         except asyncio.TimeoutError as err:
-            raise CannotConnect(f"Timeout connecting to {url}") from err
+            raise CannotConnect(f"Timeout contacting {url}") from err
         except aiohttp.ClientError as err:
-            raise CannotConnect(f"Error connecting to {url}: {err}") from err
-
-    async def async_get_status(self) -> dict[str, Any]:
-        """Get system status (no authentication required).
-
-        Returns:
-            Status data with keys: status, version, api_version, name
-        """
-        return await self._request("GET", API_STATUS, authenticated=False)
-
-    async def async_get_stats(self) -> dict[str, Any]:
-        """Get inventory statistics.
-
-        Returns:
-            Stats data with keys: total_locations, total_containers,
-            total_items, total_photos, total_tags, items_needing_review,
-            items_by_condition, items_by_season, last_updated
-        """
-        return await self._request("GET", API_STATS)
-
-    async def async_get_reminders(self) -> dict[str, Any]:
-        """Get reminder summary.
-
-        Returns:
-            Reminders data with keys: total_reminders, pending_reminders,
-            overdue_reminders, due_today, due_this_week, reminders_by_type
-        """
-        return await self._request("GET", API_REMINDERS)
-
-    async def async_search(
-        self,
-        query: str,
-        limit: int = 10,
-    ) -> dict[str, Any]:
-        """Search for items.
-
-        Args:
-            query: Search query string
-            limit: Maximum number of results
-
-        Returns:
-            Search results with keys: items, total_count, query
-        """
-        return await self._request(
-            "GET",
-            API_SEARCH,
-            params={"q": query, "limit": limit},
-        )
-
-    async def async_get_container_by_qr(
-        self,
-        qr_code: str,
-    ) -> dict[str, Any]:
-        """Get container by QR code.
-
-        Args:
-            qr_code: QR code value (e.g., SH-ABC123)
-
-        Returns:
-            Container data with keys: id, name, qr_code, location_name,
-            item_count, items
-        """
-        return await self._request(
-            "GET",
-            f"{API_CONTAINER_QR}/{qr_code}",
-        )
-
-    async def async_test_connection(self) -> bool:
-        """Test the connection to StorageHub.
-
-        Returns:
-            True if connection and authentication are successful
-
-        Raises:
-            CannotConnect: If connection fails
-            InvalidAuth: If authentication fails
-        """
-        # First test basic connectivity (no auth)
-        await self.async_get_status()
-        # Then test authentication
-        await self.async_get_stats()
-        return True
+            raise CannotConnect(f"Cannot reach {url}: {err}") from err

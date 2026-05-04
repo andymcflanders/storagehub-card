@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "host": "Vert-URL",
+          "api_key": "API-nøkkel"
+        },
+        "data_description": {
+          "host": "Grunn-URL til StorageHub-instansen din, f.eks. https://storagehub.example.com",
+          "api_key": "API-nøkkel med read- og search-tilgang (begynner med shub_)"
+        }
+      },
+      "reauth_confirm": {
+        "description": "StorageHub-nøkkelen ble avvist. Lim inn en ny for å koble til igjen.",
+        "data": {
+          "api_key": "API-nøkkel"
+        }
+      },
+      "reconfigure": {
+        "data": {
+          "host": "Vert-URL",
+          "api_key": "API-nøkkel"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Klarte ikke å koble til",
+      "invalid_auth": "Ugyldig autentisering",
+      "unknown": "Uventet feil"
+    },
+    "abort": {
+      "already_configured": "StorageHub er allerede konfigurert",
+      "instance_mismatch": "Verten peker på en annen StorageHub-instans",
+      "reauth_successful": "Reautentisering fullført",
+      "reconfigure_successful": "Konfigurasjon oppdatert"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_items": {
+        "name": "Antall ting"
+      }
+    },
+    "binary_sensor": {
+      "connected": {
+        "name": "Tilkoblet"
+      }
+    }
+  }
+}

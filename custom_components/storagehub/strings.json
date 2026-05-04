@@ -2,72 +2,50 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to StorageHub",
-        "description": "Enter your StorageHub server details. You can create an API key in the StorageHub web UI under Settings > API Keys.",
         "data": {
-          "host": "URL",
-          "api_key": "API Key",
-          "scan_interval": "Update interval (seconds)"
+          "host": "Host URL",
+          "api_key": "API key"
         },
         "data_description": {
-          "host": "Full URL to your StorageHub instance (e.g., http://storagehub.local)",
-          "api_key": "API key with 'read' and 'search' scopes",
-          "scan_interval": "How often to poll for updates (60-3600 seconds)"
+          "host": "Base URL of your StorageHub instance, e.g. https://storagehub.example.com",
+          "api_key": "API key with read and search scopes (starts with shub_)"
+        }
+      },
+      "reauth_confirm": {
+        "description": "The StorageHub API key was rejected. Paste a new one to reconnect.",
+        "data": {
+          "api_key": "API key"
+        }
+      },
+      "reconfigure": {
+        "data": {
+          "host": "Host URL",
+          "api_key": "API key"
         }
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to StorageHub. Verify the URL is correct and the server is running.",
-      "invalid_auth": "Invalid API key. Verify the key is correct and has the required scopes (read, search).",
-      "unknown": "An unexpected error occurred."
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "This StorageHub instance is already configured."
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "StorageHub Options",
-        "data": {
-          "scan_interval": "Update interval (seconds)"
-        },
-        "data_description": {
-          "scan_interval": "How often to poll for updates (60-3600 seconds)"
-        }
-      }
+      "already_configured": "StorageHub is already configured",
+      "instance_mismatch": "The host you supplied points at a different StorageHub instance",
+      "reauth_successful": "Re-authentication completed",
+      "reconfigure_successful": "Configuration updated"
     }
   },
   "entity": {
     "sensor": {
       "total_items": {
-        "name": "Total Items"
-      },
-      "overdue_reminders": {
-        "name": "Overdue Reminders"
+        "name": "Total items"
       }
     },
     "binary_sensor": {
       "connected": {
         "name": "Connected"
-      },
-      "has_overdue_reminders": {
-        "name": "Has Overdue Reminders"
       }
-    }
-  },
-  "exceptions": {
-    "no_config_entry": {
-      "message": "No StorageHub integration configured. Please add it via Settings > Devices & Services."
-    },
-    "auth_failed": {
-      "message": "Authentication failed. Check your API key."
-    },
-    "cannot_connect": {
-      "message": "Cannot connect to StorageHub server."
-    },
-    "container_not_found": {
-      "message": "Container with QR code '{qr_code}' not found."
     }
   }
 }

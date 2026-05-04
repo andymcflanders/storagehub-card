@@ -1,83 +1,98 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
-## Project Overview
+## Project overview
 
-Home Assistant custom integration for StorageHub, a self-hosted personal inventory management system. Search-first design focused on "where is my X?" use case.
+Home Assistant custom integration for StorageHub, a self-hosted
+inventory system. Search-first: built around the "where is my X?"
+use case via a Lovelace card and HA Assist voice queries.
 
-## Project Structure
+This is a **v2.0 reboot** in progress. The v1 implementation (Dec
+2025) was wiped; see `PLAN.md` for the phased rebuild and
+`BACKEND_REQUIREMENTS.md` for the changes the StorageHub backend
+needs to land in parallel.
+
+## Current phase
+
+**Phase 0 — skeleton.** Heartbeat coordinator, `total_items` sensor,
+`connected` binary sensor, config flow with reauth + reconfigure.
+No search, no card, no voice yet — those are phases 1, 3, and 2
+respectively.
+
+## Project structure
 
 ```
 ha-storagehunters/
-├── custom_components/storagehub/   # HA integration
-│   ├── __init__.py                 # Entry setup, platform forwarding
-│   ├── manifest.json               # Integration metadata
-│   ├── const.py                    # Constants, API endpoints
-│   ├── api.py                      # Async API client (aiohttp)
-│   ├── config_flow.py              # UI configuration wizard
-│   ├── coordinator.py              # DataUpdateCoordinator
-│   ├── sensor.py                   # total_items, overdue_reminders
-│   ├── binary_sensor.py            # connected, has_overdue_reminders
-│   ├── services.py                 # search, get_container, refresh
-│   ├── services.yaml               # Service definitions
-│   ├── strings.json                # UI strings
-│   └── translations/en.json
-├── storagehub-card/                # Lovelace card (TypeScript/Lit)
-│   ├── src/
-│   │   ├── storagehub-card.ts      # Main card component
-│   │   ├── types.ts                # TypeScript interfaces
-│   │   └── styles.ts               # CSS styles
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── rollup.config.js
-├── documentation/                   # StorageHub API docs
-└── hacs.json                       # HACS configuration
+├── PLAN.md                            # Phased rebuild plan
+├── BACKEND_REQUIREMENTS.md            # Backend issue list
+├── custom_components/storagehub/
+│   ├── __init__.py                    # Entry setup, runtime_data, platforms
+│   ├── manifest.json
+│   ├── const.py                       # Domain, intervals, endpoints
+│   ├── api.py                         # Async API client + dataclasses
+│   ├── coordinator.py                 # HeartbeatCoordinator
+│   ├── config_flow.py                 # user / reauth / reconfigure
+│   ├── sensor.py                      # total_items
+│   ├── binary_sensor.py               # connected
+│   ├── strings.json
+│   └── translations/{en,no}.json
+├── tests/
+│   ├── conftest.py
+│   ├── test_api.py
+│   └── test_config_flow.py
+├── requirements_test.txt
+└── hacs.json
 ```
 
-## StorageHub API
+The Lovelace card under `storagehub-card/` and search/voice services
+land in later phases.
 
-Endpoints at `/api/ha/*` with `X-API-Key: shub_xxx` header:
+## StorageHub API endpoints used in phase 0
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/ha/status` | System status (no auth) |
-| `GET /api/ha/stats` | Inventory statistics |
-| `GET /api/ha/reminders` | Reminder counts |
-| `GET /api/ha/search?q=query` | Semantic search |
-| `GET /api/ha/containers/qr/{code}` | QR code lookup |
+| Endpoint | Auth | Phase |
+|---|---|---|
+| `GET /api/ha/status` | none | 0 |
+| `GET /api/ha/stats` | API key | 0 |
+| `GET /api/ha/search?q=…` | API key | 1 |
+| `GET /api/ha/items/index` | API key | 3 (after backend issue 2) |
 
-See `documentation/API_DOCUMENTATION.md` for full reference.
+See `../storagehunters/docs/API_DOCUMENTATION.md` for the canonical
+backend API reference.
 
-## Development Commands
+## Development commands
 
 ```bash
-# Backend - lint and type check
-ruff check custom_components/storagehub
-ruff format custom_components/storagehub
+# Lint
+ruff check custom_components/storagehub tests
+ruff format custom_components/storagehub tests
+
+# Type check
 mypy custom_components/storagehub
 
-# Frontend - build card
-cd storagehub-card
-npm install
-npm run build        # Production build
-npm run watch        # Development with watch
-
-# Testing
+# Tests
+pip install -r requirements_test.txt   # one-time
 pytest tests/
-pytest tests/test_config_flow.py -v
 ```
 
-## Key Patterns
+## HA conventions used here
 
-- **Config Flow**: Validates `/api/ha/status` (no auth) then `/api/ha/stats` (with auth)
-- **Coordinator**: Polls stats + reminders every 5 minutes (configurable)
-- **Services**: Use `SupportsResponse.ONLY` for search/get_container
-- **Card**: Debounced search (300ms), calls `storagehub.search` service
+- `entry.runtime_data` holds the `StorageHubData` dataclass — no
+  `hass.data[DOMAIN]` global.
+- `type StorageHubConfigEntry = ConfigEntry[StorageHubData]` aliases
+  the typed entry.
+- Coordinator passes `config_entry=` so HA can attach auth-failure
+  handling automatically.
+- Entities use `_attr_has_entity_name = True` and
+  `translation_key`; user-facing strings live only in
+  `translations/<lang>.json`, never hardcoded in Python.
+- Config flow uses `_get_reauth_entry()` / `_get_reconfigure_entry()`
+  (HA 2024.12+).
+- Min HA version pinned in `hacs.json` — bump if a newer API is
+  needed.
 
-## Home Assistant Conventions
+## Single-instance assumption
 
-- All I/O uses `async`/`await` with `aiohttp`
-- Entities inherit `CoordinatorEntity`
-- Entity descriptions use frozen dataclasses
-- Services return responses via `response_variable` in automations
+The plan locks single-instance support: one StorageHub per HA. Don't
+add `entry_id` selectors to services or the card without revisiting
+this decision.

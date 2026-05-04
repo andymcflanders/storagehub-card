@@ -2,102 +2,66 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from . import StorageHubConfigEntry
 from .const import DOMAIN
-from .coordinator import StorageHubData, StorageHubDataUpdateCoordinator
+from .coordinator import HeartbeatCoordinator
 
-
-@dataclass(frozen=True, kw_only=True)
-class StorageHubBinarySensorEntityDescription(BinarySensorEntityDescription):
-    """Describes StorageHub binary sensor entity."""
-
-    is_on_fn: Callable[[StorageHubData | None, bool], bool]
-
-
-BINARY_SENSOR_DESCRIPTIONS: tuple[StorageHubBinarySensorEntityDescription, ...] = (
-    StorageHubBinarySensorEntityDescription(
-        key="connected",
-        translation_key="connected",
-        device_class=BinarySensorDeviceClass.CONNECTIVITY,
-        is_on_fn=lambda data, last_success: last_success,
-    ),
-    StorageHubBinarySensorEntityDescription(
-        key="has_overdue_reminders",
-        translation_key="has_overdue_reminders",
-        icon="mdi:bell-alert",
-        device_class=BinarySensorDeviceClass.PROBLEM,
-        is_on_fn=lambda data, _: data.overdue_reminders > 0 if data else False,
-    ),
+CONNECTED_DESCRIPTION = BinarySensorEntityDescription(
+    key="connected",
+    translation_key="connected",
+    device_class=BinarySensorDeviceClass.CONNECTIVITY,
 )
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: StorageHubConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up StorageHub binary sensors based on a config entry."""
-    coordinator: StorageHubDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][
-        "coordinator"
-    ]
-
-    async_add_entities(
-        StorageHubBinarySensor(coordinator, description)
-        for description in BINARY_SENSOR_DESCRIPTIONS
-    )
+    """Register the connectivity binary sensor."""
+    async_add_entities([ConnectedBinarySensor(entry.runtime_data.heartbeat, entry)])
 
 
-class StorageHubBinarySensor(
-    CoordinatorEntity[StorageHubDataUpdateCoordinator], BinarySensorEntity
+class ConnectedBinarySensor(
+    CoordinatorEntity[HeartbeatCoordinator], BinarySensorEntity
 ):
-    """Representation of a StorageHub binary sensor."""
+    """Reflects whether the most recent heartbeat fetch succeeded."""
 
-    entity_description: StorageHubBinarySensorEntityDescription
     _attr_has_entity_name = True
+    entity_description = CONNECTED_DESCRIPTION
 
     def __init__(
         self,
-        coordinator: StorageHubDataUpdateCoordinator,
-        description: StorageHubBinarySensorEntityDescription,
+        coordinator: HeartbeatCoordinator,
+        entry: StorageHubConfigEntry,
     ) -> None:
-        """Initialize the binary sensor.
-
-        Args:
-            coordinator: Data update coordinator
-            description: Entity description
-        """
         super().__init__(coordinator)
-        self.entity_description = description
-
-        # Set unique ID
-        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{description.key}"
-
-        # Set device info
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, coordinator.config_entry.entry_id)},
-            "name": coordinator.config_entry.title,
-            "manufacturer": "StorageHub",
-            "model": "Inventory System",
-            "configuration_url": coordinator.api_client.host,
-        }
+        self._attr_unique_id = f"{entry.unique_id}_connected"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.title,
+            manufacturer="StorageHub",
+            model="Inventory",
+            configuration_url=entry.data[CONF_HOST],
+        )
 
     @property
     def is_on(self) -> bool:
-        """Return true if the binary sensor is on."""
-        # Check if last update was successful
-        last_update_success = self.coordinator.last_update_success
-        return self.entity_description.is_on_fn(
-            self.coordinator.data, last_update_success
-        )
+        return self.coordinator.last_update_success
+
+    @property
+    def available(self) -> bool:
+        # A connectivity sensor reports state even when the underlying
+        # poll has failed, otherwise the off-state would be invisible.
+        return True

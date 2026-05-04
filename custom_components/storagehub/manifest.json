@@ -1,12 +1,12 @@
 {
   "domain": "storagehub",
   "name": "StorageHub",
-  "codeowners": [],
+  "codeowners": ["@andersjh"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/yourusername/ha-storagehunters",
+  "documentation": "https://github.com/andersjh/ha-storagehunters",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/yourusername/ha-storagehunters/issues",
+  "issue_tracker": "https://github.com/andersjh/ha-storagehunters/issues",
   "requirements": [],
-  "version": "1.0.0"
+  "version": "2.0.0"
 }

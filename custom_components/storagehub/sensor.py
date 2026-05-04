@@ -4,143 +4,80 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    ATTR_DUE_THIS_WEEK,
-    ATTR_DUE_TODAY,
-    ATTR_ITEMS_BY_CONDITION,
-    ATTR_ITEMS_BY_SEASON,
-    ATTR_ITEMS_NEEDING_REVIEW,
-    ATTR_PENDING_REMINDERS,
-    ATTR_REMINDERS_BY_TYPE,
-    ATTR_TOTAL_CONTAINERS,
-    ATTR_TOTAL_LOCATIONS,
-    ATTR_TOTAL_PHOTOS,
-    ATTR_TOTAL_REMINDERS,
-    ATTR_TOTAL_TAGS,
-    DOMAIN,
-)
-from .coordinator import StorageHubData, StorageHubDataUpdateCoordinator
+from . import StorageHubConfigEntry
+from .const import DOMAIN
+from .coordinator import HeartbeatCoordinator, HeartbeatData
 
 
 @dataclass(frozen=True, kw_only=True)
-class StorageHubSensorEntityDescription(SensorEntityDescription):
-    """Describes StorageHub sensor entity."""
+class StorageHubSensorDescription(SensorEntityDescription):
+    """Describe a StorageHub sensor."""
 
-    value_fn: Callable[[StorageHubData], int | str | None]
-    extra_attrs_fn: Callable[[StorageHubData], dict[str, Any]] | None = None
+    value_fn: Callable[[HeartbeatData], int | str | None]
 
 
-SENSOR_DESCRIPTIONS: tuple[StorageHubSensorEntityDescription, ...] = (
-    StorageHubSensorEntityDescription(
+SENSORS: tuple[StorageHubSensorDescription, ...] = (
+    StorageHubSensorDescription(
         key="total_items",
         translation_key="total_items",
         icon="mdi:package-variant",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="items",
-        value_fn=lambda data: data.total_items,
-        extra_attrs_fn=lambda data: {
-            ATTR_TOTAL_LOCATIONS: data.total_locations,
-            ATTR_TOTAL_CONTAINERS: data.total_containers,
-            ATTR_TOTAL_PHOTOS: data.stats.get("total_photos", 0),
-            ATTR_TOTAL_TAGS: data.stats.get("total_tags", 0),
-            ATTR_ITEMS_NEEDING_REVIEW: data.stats.get("items_needing_review", 0),
-            ATTR_ITEMS_BY_CONDITION: data.stats.get("items_by_condition", {}),
-            ATTR_ITEMS_BY_SEASON: data.stats.get("items_by_season", {}),
-        },
-    ),
-    StorageHubSensorEntityDescription(
-        key="overdue_reminders",
-        translation_key="overdue_reminders",
-        icon="mdi:bell-alert",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="reminders",
-        value_fn=lambda data: data.overdue_reminders,
-        extra_attrs_fn=lambda data: {
-            ATTR_TOTAL_REMINDERS: data.reminders.get("total_reminders", 0),
-            ATTR_PENDING_REMINDERS: data.reminders.get("pending_reminders", 0),
-            ATTR_DUE_TODAY: data.due_today,
-            ATTR_DUE_THIS_WEEK: data.due_this_week,
-            ATTR_REMINDERS_BY_TYPE: data.reminders.get("reminders_by_type", {}),
-        },
+        value_fn=lambda data: data.stats.total_items,
     ),
 )
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: StorageHubConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up StorageHub sensors based on a config entry."""
-    coordinator: StorageHubDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][
-        "coordinator"
-    ]
-
+    """Register the heartbeat sensors for this config entry."""
+    coordinator = entry.runtime_data.heartbeat
     async_add_entities(
-        StorageHubSensor(coordinator, description)
-        for description in SENSOR_DESCRIPTIONS
+        StorageHubSensor(coordinator, entry, description) for description in SENSORS
     )
 
 
-class StorageHubSensor(
-    CoordinatorEntity[StorageHubDataUpdateCoordinator], SensorEntity
-):
-    """Representation of a StorageHub sensor."""
+class StorageHubSensor(CoordinatorEntity[HeartbeatCoordinator], SensorEntity):
+    """A single StorageHub sensor backed by the heartbeat coordinator."""
 
-    entity_description: StorageHubSensorEntityDescription
     _attr_has_entity_name = True
+    entity_description: StorageHubSensorDescription
 
     def __init__(
         self,
-        coordinator: StorageHubDataUpdateCoordinator,
-        description: StorageHubSensorEntityDescription,
+        coordinator: HeartbeatCoordinator,
+        entry: StorageHubConfigEntry,
+        description: StorageHubSensorDescription,
     ) -> None:
-        """Initialize the sensor.
-
-        Args:
-            coordinator: Data update coordinator
-            description: Entity description
-        """
         super().__init__(coordinator)
         self.entity_description = description
-
-        # Set unique ID
-        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{description.key}"
-
-        # Set device info
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, coordinator.config_entry.entry_id)},
-            "name": coordinator.config_entry.title,
-            "manufacturer": "StorageHub",
-            "model": "Inventory System",
-            "configuration_url": coordinator.api_client.host,
-        }
+        self._attr_unique_id = f"{entry.unique_id}_{description.key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.title,
+            manufacturer="StorageHub",
+            model="Inventory",
+            configuration_url=entry.data[CONF_HOST],
+            sw_version=(coordinator.data.status.version if coordinator.data else None),
+        )
 
     @property
     def native_value(self) -> int | str | None:
-        """Return the state of the sensor."""
         if self.coordinator.data is None:
             return None
         return self.entity_description.value_fn(self.coordinator.data)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return extra state attributes."""
-        if (
-            self.coordinator.data is None
-            or self.entity_description.extra_attrs_fn is None
-        ):
-            return None
-        return self.entity_description.extra_attrs_fn(self.coordinator.data)
