@@ -7,6 +7,7 @@ export interface IndexEntry {
   container_name: string | null;
   location_name: string | null;
   ai_names: string[];
+  primary_image_url: string | null;
 }
 
 export interface SearchLiteResponse {

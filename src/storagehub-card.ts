@@ -240,22 +240,50 @@ export class StorageHubCard extends LitElement {
     window.open(`${base}/items/${id}`, "_blank", "noopener");
   }
 
+  private _absoluteImageUrl(path: string | null): string | null {
+    if (!path) return null;
+    // Already absolute? Pass through.
+    if (/^https?:\/\//i.test(path)) return path;
+    // Relative path from the backend; needs the configured host to load.
+    if (!this._config.storagehub_url) return null;
+    const base = this._config.storagehub_url.replace(/\/+$/, "");
+    return `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+  }
+
+  private _onThumbError(e: Event): void {
+    // Hide broken thumbs rather than showing the browser's default icon.
+    const target = e.target as HTMLImageElement;
+    target.classList.add("thumb-broken");
+  }
+
   private _renderRow(
     id: string,
     name: string,
     container: string | null,
     location: string | null,
     owner: string | null,
+    imageUrl: string | null,
   ): TemplateResult {
     const where = [container ? `${container}` : null, location ? `in ${location}` : null]
       .filter((p) => p !== null)
       .join(" ");
     const clickable = !!this._config.storagehub_url;
+    const absUrl = this._absoluteImageUrl(imageUrl);
     return html`
       <div
         class="row ${clickable ? "clickable" : ""}"
         @click=${clickable ? () => this._openItem(id) : undefined}
       >
+        <div class="thumb">
+          ${absUrl
+            ? html`<img
+                src=${absUrl}
+                alt=""
+                loading="lazy"
+                @error=${this._onThumbError}
+              />`
+            : nothing}
+        </div>
         <div class="row-main">
           <div class="row-name">${name}</div>
           <div class="row-location">${where || "—"}</div>
@@ -303,6 +331,7 @@ export class StorageHubCard extends LitElement {
               r.entry.container_name,
               r.entry.location_name,
               r.entry.owner_name,
+              r.entry.primary_image_url,
             ),
           )}
         </div>
@@ -319,6 +348,7 @@ export class StorageHubCard extends LitElement {
                     it.container_name,
                     it.location_name,
                     it.owner_name,
+                    it.primary_image_url,
                   ),
                 )}
               </div>`

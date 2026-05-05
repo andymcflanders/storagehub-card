@@ -47,10 +47,31 @@ export const cardStyles = css`
   .row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     padding: 8px 4px;
     border-radius: 6px;
     cursor: default;
+  }
+
+  .thumb {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--secondary-background-color, #f5f5f5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .thumb img.thumb-broken {
+    display: none;
   }
   .row.clickable {
     cursor: pointer;
