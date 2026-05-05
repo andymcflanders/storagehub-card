@@ -1,5 +1,6 @@
 {
-  "name": "StorageHub",
-  "render_readme": true,
-  "homeassistant": "2024.12.0"
+  "name": "StorageHub Card",
+  "render_readme": false,
+  "filename": "storagehub-card.js",
+  "content_in_root": false
 }
