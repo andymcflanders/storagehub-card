@@ -71,6 +71,7 @@ for the integration.
 |---|---|---|
 | `type` | — | Must be `custom:storagehub-card` |
 | `storagehub_url` | — | StorageHub web UI base URL. Enables thumbnails and click-through. |
+| `language` | from HA | Override the card's UI language. Accepts BCP-47 codes; currently `en` and `no`/`nb`/`nn` are localized — anything else falls back to English. |
 | `max_local_results` | `10` | Max instant-filter results (1–100) |
 | `max_semantic_results` | `10` | Max smart-match results (1–50) |
 | `semantic_debounce_ms` | `400` | Pause before the smart-match query fires (0–5000) |

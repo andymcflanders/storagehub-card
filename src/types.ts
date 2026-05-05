@@ -40,6 +40,7 @@ export interface SearchResponse {
 export interface StorageHubCardConfig {
   type: "custom:storagehub-card";
   storagehub_url?: string;
+  language?: string;
   max_local_results?: number;
   max_semantic_results?: number;
   semantic_debounce_ms?: number;
@@ -48,6 +49,7 @@ export interface StorageHubCardConfig {
 // Minimal shape of HA's HomeAssistant object surfaced to cards. The full type
 // from `home-assistant-js-websocket` brings in too much for what we need.
 export interface HomeAssistant {
+  language: string;
   states: Record<string, { state: string; attributes: Record<string, unknown> }>;
   callService: (
     domain: string,

@@ -10,6 +10,7 @@ import { LitElement, html, nothing, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { searchLite, searchSemantic, subscribeIndexEtag } from "./api";
+import { type CardStrings, pickStrings } from "./i18n";
 import { Index, type ScoredEntry } from "./search-index";
 import { cardStyles } from "./styles";
 import type {
@@ -77,9 +78,12 @@ export class StorageHubCard extends LitElement {
   @state() private _error: string | null = null;
   @state() private _semanticError: string | null = null;
 
-  private _config!: Required<Omit<StorageHubCardConfig, "type" | "storagehub_url">> & {
+  private _config!: Required<
+    Omit<StorageHubCardConfig, "type" | "storagehub_url" | "language">
+  > & {
     type: "custom:storagehub-card";
     storagehub_url?: string;
+    language?: string;
   };
   private _index: Index | null = null;
   private _debounceHandle: number | null = null;
@@ -113,10 +117,15 @@ export class StorageHubCard extends LitElement {
     this._config = {
       type: "custom:storagehub-card",
       storagehub_url: config.storagehub_url,
+      language: config.language,
       max_local_results,
       max_semantic_results,
       semantic_debounce_ms,
     };
+  }
+
+  private get _strings(): CardStrings {
+    return pickStrings(this._config?.language ?? this.hass?.language);
   }
 
   static getStubConfig(): Partial<StorageHubCardConfig> {
@@ -152,7 +161,7 @@ export class StorageHubCard extends LitElement {
       this._index = new Index(resp.items);
       if (this._query) this._recomputeLocal();
     } catch (err) {
-      this._error = `Could not load inventory index: ${(err as Error).message ?? err}`;
+      this._error = `${this._strings.errorIndexLoad}: ${(err as Error).message ?? err}`;
     } finally {
       this._loadingIndex = false;
     }
@@ -227,7 +236,7 @@ export class StorageHubCard extends LitElement {
       this._semanticResults = resp.items.filter((it) => !localIds.has(it.id));
     } catch (err) {
       if (gen !== this._semanticGen) return;
-      this._semanticError = `Smart search unavailable: ${(err as Error).message ?? err}`;
+      this._semanticError = `${this._strings.errorSemantic}: ${(err as Error).message ?? err}`;
       this._semanticResults = [];
     } finally {
       if (gen === this._semanticGen) this._loadingSemantic = false;
@@ -264,9 +273,7 @@ export class StorageHubCard extends LitElement {
     owner: string | null,
     imageUrl: string | null,
   ): TemplateResult {
-    const where = [container ? `${container}` : null, location ? `in ${location}` : null]
-      .filter((p) => p !== null)
-      .join(" ");
+    const where = [container, location].filter((p): p is string => !!p).join(" · ");
     const clickable = !!this._config.storagehub_url;
     const absUrl = this._absoluteImageUrl(imageUrl);
     return html`
@@ -299,12 +306,14 @@ export class StorageHubCard extends LitElement {
       !this._error &&
       this._index?.size === 0;
     const queryReady = this._query.trim().length >= 2;
+    const t = this._strings;
     return html`
       <ha-card>
         <input
           class="search-input"
           type="text"
-          placeholder="Search inventory…"
+          placeholder=${t.searchPlaceholder}
+          aria-label=${t.searchAriaLabel}
           .value=${this._query}
           @input=${this._onInput}
           @keydown=${this._onKeydown}
@@ -315,13 +324,13 @@ export class StorageHubCard extends LitElement {
           ? html`<div class="error">${this._error}</div>`
           : nothing}
         ${this._loadingIndex
-          ? html`<div class="loading">Loading inventory…</div>`
+          ? html`<div class="loading">${t.loadingInventory}</div>`
           : nothing}
         ${showEmpty
-          ? html`<div class="empty">No items in inventory yet.</div>`
+          ? html`<div class="empty">${t.emptyInventory}</div>`
           : nothing}
         ${queryReady && this._localResults.length === 0 && !this._loadingSemantic && this._semanticResults.length === 0
-          ? html`<div class="empty">No matches.</div>`
+          ? html`<div class="empty">${t.noMatches}</div>`
           : nothing}
         <div class="results">
           ${this._localResults.map((r) =>
@@ -339,7 +348,7 @@ export class StorageHubCard extends LitElement {
           ? html`<div class="error">${this._semanticError}</div>`
           : nothing}
         ${this._semanticResults.length > 0
-          ? html`<div class="smart-matches-header">Smart matches</div>
+          ? html`<div class="smart-matches-header">${t.smartMatchesHeader}</div>
               <div class="results">
                 ${this._semanticResults.map((it) =>
                   this._renderRow(
@@ -354,7 +363,7 @@ export class StorageHubCard extends LitElement {
               </div>`
           : nothing}
         ${this._loadingSemantic && this._semanticResults.length === 0
-          ? html`<div class="semantic-loading">Looking deeper…</div>`
+          ? html`<div class="semantic-loading">${t.lookingDeeper}</div>`
           : nothing}
       </ha-card>
     `;
