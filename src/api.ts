@@ -28,7 +28,7 @@ export async function searchSemantic(
 ): Promise<SearchResponse> {
   const result = await hass.callService(
     "storagehub",
-    "search",
+    "semantic_search",
     { query, limit },
     undefined,
     false,
