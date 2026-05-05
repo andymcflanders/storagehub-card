@@ -1,6 +1,6 @@
 {
   "name": "StorageHub Card",
-  "render_readme": false,
+  "render_readme": true,
   "filename": "storagehub-card.js",
   "content_in_root": false
 }
